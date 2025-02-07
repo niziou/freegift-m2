@@ -1,13 +1,13 @@
 <?xml version="1.0"?>
 <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Config:etc/system_file.xsd">
     <system>
-        <tab id="nizou" translate="label" sortOrder="100">
-            <label>Nizou</label>
+        <tab id="niziou" translate="label" sortOrder="100">
+            <label>Niziou</label>
         </tab>
         <section id="freegift" translate="label" type="text" sortOrder="100" showInDefault="1" showInWebsite="1" showInStore="1">
             <label>Free Gift Configuration</label>
-            <tab>nizou</tab>
-            <resource>Nizou_FreeGift::config</resource>
+            <tab>niziou</tab>
+            <resource>Niziou_FreeGift::config</resource>
             <group id="general" translate="label" type="text" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="1">
                 <label>General Settings</label>
                 <field id="enabled" translate="label" type="select" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="1">

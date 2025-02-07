@@ -1,5 +1,5 @@
 {
-    "name": "nizou/freegift",
+    "name": "niziou/freegift",
     "description": "Magento 2 Free Gift Module",
     "require": {
         "php": "~8.3.0",
@@ -16,7 +16,7 @@
             "registration.php"
         ],
         "psr-4": {
-            "Nizou\\FreeGift\\": ""
+            "Niziou\\FreeGift\\": ""
         }
     }
 }
