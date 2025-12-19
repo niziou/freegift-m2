@@ -1,0 +1,21 @@
+{
+  "name": "freegift/module-freegift",
+  "description": "Magento 2 module for automatic free gift handling via cart price rules or global configuration.",
+  "type": "magento2-module",
+  "license": "OSL-3.0",
+  "require": {
+    "php": "^7.4||^8.1",
+    "magento/framework": "^103.0",
+    "magento/module-sales-rule": "^103.0",
+    "magento/module-quote": "^103.0",
+    "magento/module-config": "^103.0"
+  },
+  "autoload": {
+    "files": [
+      "registration.php"
+    ],
+    "psr-4": {
+      "Freegift\\FreeGift\\": ""
+    }
+  }
+}

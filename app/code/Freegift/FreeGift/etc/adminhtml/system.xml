@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Config:etc/system_file.xsd">
+    <system>
+        <section id="freegift" translate="label" sortOrder="910" showInDefault="1" showInWebsite="1" showInStore="0">
+            <label>Free Gift</label>
+            <tab>sales</tab>
+            <resource>Freegift_FreeGift::config</resource>
+            <group id="general" translate="label" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="0">
+                <label>General</label>
+                <field id="enabled" translate="label" type="select" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Enable Global Free Gift</label>
+                    <source_model>Magento\\Config\\Model\\Config\\Source\\Yesno</source_model>
+                </field>
+                <field id="product_sku" translate="label" type="text" sortOrder="20" showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Gift Product SKU</label>
+                    <comment>Simple or virtual product with no required options to add when no rule-specific gift is present.</comment>
+                </field>
+            </group>
+        </section>
+    </system>
+</config>

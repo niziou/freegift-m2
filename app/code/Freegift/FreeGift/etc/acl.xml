@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<acl xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:Acl/etc/acl.xsd">
+    <resources>
+        <resource id="Magento_Backend::admin">
+            <resource id="Magento_Backend::stores">
+                <resource id="Magento_Config::config">
+                    <resource id="Freegift_FreeGift::config" title="Free Gift Configuration" sortOrder="9999"/>
+                </resource>
+            </resource>
+            <resource id="Magento_Promo::quote">
+                <resource id="Freegift_FreeGift::manage_rules" title="Manage Free Gift Rule Settings" sortOrder="1000"/>
+            </resource>
+        </resource>
+    </resources>
+</acl>
