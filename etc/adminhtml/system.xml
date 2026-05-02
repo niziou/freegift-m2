@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Config:etc/system_file.xsd">
+    <system>
+        <tab id="niziou" translate="label" sortOrder="100">
+            <label>Niziou</label>
+        </tab>
+        <section id="freegift" translate="label" type="text" sortOrder="100" showInDefault="1" showInWebsite="1" showInStore="1">
+            <label>Free Gift Configuration</label>
+            <tab>niziou</tab>
+            <resource>Niziou_FreeGift::config</resource>
+            <group id="general" translate="label" type="text" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="1">
+                <label>General Settings</label>
+                <field id="enabled" translate="label" type="select" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Enabled</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                </field>
+                <field id="rules" translate="label" type="textarea" sortOrder="20" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Free Gift Rules (JSON Format)</label>
+                    <comment><![CDATA[
+                        Enter rules in JSON format. Example:
+                        [
+                            {"threshold": 100, "gift_product_sku": "FREEGIFT001", "gift_actual_price": 15},
+                            {"threshold": 200, "gift_product_sku": "FREEGIFT002", "gift_actual_price": 30}
+                        ]
+                    ]]></comment>
+                </field>
+            </group>
+        </section>
+    </system>
+</config>
