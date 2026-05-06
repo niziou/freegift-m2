@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:Event/etc/events.xsd">
     <event name="sales_quote_collect_totals_after">
-        <observer name="niziou_freegift_observer" instance="Niziou\FreeGift\Observer\FreeGiftObserver" />
+        <observer name="niziou_freegift_apply_to_quote" instance="Niziou\FreeGift\Observer\FreeGiftObserver"/>
     </event>
 </config>

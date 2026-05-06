@@ -3,127 +3,216 @@ declare(strict_types=1);
 
 namespace Niziou\FreeGift\Observer;
 
-use Magento\Framework\Event\ObserverInterface;
-use Magento\Framework\Event\Observer;
-use Magento\Quote\Model\Quote;
+use Magento\Catalog\Api\Data\ProductInterface;
 use Magento\Catalog\Api\ProductRepositoryInterface;
-use Niziou\FreeGift\Service\FreeGiftRuleRetriver;
+use Magento\Catalog\Model\Product\Type as ProductType;
+use Magento\Framework\Event\Observer;
+use Magento\Framework\Event\ObserverInterface;
+use Magento\Quote\Model\Quote;
+use Magento\Quote\Model\Quote\Item as QuoteItem;
+use Magento\SalesRule\Model\ResourceModel\Rule\CollectionFactory as RuleCollectionFactory;
+use Niziou\FreeGift\Model\Config\GiftConfig;
 use Psr\Log\LoggerInterface;
 
 class FreeGiftObserver implements ObserverInterface
 {
-    /**
-     * @param ProductRepositoryInterface $productRepository
-     * @param FreeGiftRuleRetriver $freeGiftRuleRetriver
-     * @param LoggerInterface $logger
-     */
+    private const OPTION_CODE = 'niziou_freegift_item';
+
     public function __construct(
-        protected ProductRepositoryInterface $productRepository,
-        protected FreeGiftRuleRetriver $freeGiftRuleRetriver,
-        protected LoggerInterface $logger
+        private readonly GiftConfig $giftConfig,
+        private readonly ProductRepositoryInterface $productRepository,
+        private readonly RuleCollectionFactory $ruleCollectionFactory,
+        private readonly LoggerInterface $logger
     ) {
     }
 
-    /**
-     * Execute observer method.
-     *
-     * This method calculates the cart subtotal excluding any free gift items,
-     * finds an applicable free gift rule (if any), and then adds or removes the free gift.
-     *
-     * @param Observer $observer
-     */
-    public function execute(Observer $observer)
+    public function execute(Observer $observer): void
     {
-        /** @var Quote $quote */
-        $quote = $observer->getQuote();
-        if (!$quote) {
+        /** @var Quote|null $quote */
+        $quote = $observer->getEvent()->getQuote();
+        if (!$quote instanceof Quote || $quote->getIsMultiShipping()) {
+            return;
+        }
+        if ($quote->getData('niziou_freegift_processing')) {
+            return;
+        }
+
+        $websiteId = (int)$quote->getStore()->getWebsiteId();
+        $targetSku = $this->getSkuFromAppliedRules($quote);
+        if (!$targetSku && $this->giftConfig->isEnabled($websiteId)) {
+            $targetSku = $this->giftConfig->getConfiguredSku($websiteId);
+        }
+
+        $changed = $this->removeObsoleteGiftItems($quote, $targetSku);
+
+        if (!$targetSku) {
+            $this->recollectTotalsWhenChanged($quote, $changed);
             return;
         }
 
         try {
-            // Calculate subtotal excluding free gift items.
-            $subtotal = 0;
-            foreach ($quote->getAllVisibleItems() as $item) {
-                $isFreeGift = false;
-                foreach ($item->getOptions() as $option) {
-                    if ($option->getCode() == 'is_freegift' && $option->getValue() == 1) {
-                        $isFreeGift = true;
-                        break;
-                    }
-                }
-                if (!$isFreeGift) {
-                    $subtotal += $item->getRowTotal();
-                }
+            $product = $this->productRepository->get($targetSku, false, (int)$quote->getStoreId());
+        } catch (\Throwable $exception) {
+            $this->logger->warning(sprintf('FreeGift: unable to load gift product "%s".', $targetSku));
+            $this->recollectTotalsWhenChanged($quote, $changed);
+            return;
+        }
+
+        if (!$this->canAddProductAsGift($product)) {
+            $this->logger->warning(sprintf('FreeGift: product "%s" cannot be used as an automatic free gift.', $targetSku));
+            $this->recollectTotalsWhenChanged($quote, $changed);
+            return;
+        }
+
+        $existingGiftItem = $this->findGiftItem($quote, (string)$product->getSku());
+        if ($existingGiftItem) {
+            $changed = $this->enforceGiftItemState($existingGiftItem, (string)$product->getSku()) || $changed;
+            $this->recollectTotalsWhenChanged($quote, $changed);
+            return;
+        }
+
+        try {
+            $item = $quote->addProduct($product, 1);
+            if (is_string($item)) {
+                $this->logger->warning(sprintf('FreeGift: unable to add gift product "%s": %s', $targetSku, $item));
+                $this->recollectTotalsWhenChanged($quote, $changed);
+                return;
             }
 
-            // Retrieve free gift rules from the helper.
-            $rules = $this->freeGiftHelper->getFreeGiftRules();
-            $applicableRule = null;
+            if ($item instanceof QuoteItem) {
+                $this->enforceGiftItemState($item, (string)$product->getSku());
+                $changed = true;
+            }
+        } catch (\Throwable $exception) {
+            $this->logger->critical(sprintf('FreeGift: failed to add gift product "%s": %s', $targetSku, $exception->getMessage()));
+        }
 
-            if (is_array($rules)) {
-                foreach ($rules as $rule) {
-                    if (isset($rule['threshold']) && isset($rule['gift_product_sku'])) {
-                        if ($subtotal >= (float)$rule['threshold']) {
-                            // If multiple rules match, choose the one with the highest threshold.
-                            if (!$applicableRule || (float)$rule['threshold'] > (float)$applicableRule['threshold']) {
-                                $applicableRule = $rule;
-                            }
-                        }
-                    }
-                }
+        $this->recollectTotalsWhenChanged($quote, $changed);
+    }
+
+    private function getSkuFromAppliedRules(Quote $quote): ?string
+    {
+        $address = $quote->isVirtual() ? $quote->getBillingAddress() : $quote->getShippingAddress();
+        $appliedRuleIds = $address ? (string)$address->getAppliedRuleIds() : '';
+        if ($appliedRuleIds === '') {
+            $appliedRuleIds = (string)$quote->getAppliedRuleIds();
+        }
+        if ($appliedRuleIds === '') {
+            return null;
+        }
+
+        $ids = array_values(array_unique(array_filter(array_map('intval', explode(',', $appliedRuleIds)))));
+        if ($ids === []) {
+            return null;
+        }
+
+        $rules = $this->ruleCollectionFactory->create();
+        $rules->addFieldToFilter('rule_id', ['in' => $ids]);
+        $rules->addFieldToFilter('freegift_enabled', 1);
+        $rules->setOrder('sort_order', 'ASC');
+
+        foreach ($rules as $rule) {
+            $sku = trim((string)$rule->getData('freegift_product_sku'));
+            if ($sku !== '') {
+                return $sku;
+            }
+        }
+
+        return null;
+    }
+
+    private function removeObsoleteGiftItems(Quote $quote, ?string $targetSku): bool
+    {
+        $changed = false;
+
+        foreach ($quote->getAllItems() as $item) {
+            if (!$item instanceof QuoteItem || !$this->isGiftItem($item)) {
+                continue;
             }
 
-            // Look for an existing free gift in the quote.
-            $freeGiftItem = null;
-            foreach ($quote->getAllItems() as $item) {
-                foreach ($item->getOptions() as $option) {
-                    if ($option->getCode() == 'is_freegift' && $option->getValue() == 1) {
-                        $freeGiftItem = $item;
-                        break 2;
-                    }
-                }
+            if ($targetSku && $item->getSku() === $targetSku) {
+                continue;
             }
 
-            if ($applicableRule) {
-                // There is an applicable rule.
-                if ($freeGiftItem) {
-                    // If the free gift in the cart does not match the rule SKU, remove it.
-                    if ($freeGiftItem->getSku() != $applicableRule['gift_product_sku']) {
-                        $quote->removeItem($freeGiftItem->getId());
-                        $freeGiftItem = null;
-                    }
-                }
-                if (!$freeGiftItem) {
-                    // Load the product by SKU and add it as the free gift.
-                    $product = $this->productRepository->get($applicableRule['gift_product_sku']);
-                    if ($product && $product->getId()) {
-                        $freeGiftItem = $quote->addProduct($product, 1);
-                        // Set the price to 0.01.
-                        $freeGiftItem->setCustomPrice(0.01);
-                        $freeGiftItem->setOriginalCustomPrice(0.01);
-                        $freeGiftItem->getProduct()->setIsSuperMode(true);
-                        // Mark the item as a free gift.
-                        $freeGiftItem->addOption([
-                            'code'  => 'is_freegift',
-                            'value' => 1
-                        ]);
-                        // Optionally save the actual gift value for display purposes.
-                        if (isset($applicableRule['gift_actual_price'])) {
-                            $freeGiftItem->addOption([
-                                'code'  => 'freegift_actual_price',
-                                'value' => $applicableRule['gift_actual_price']
-                            ]);
-                        }
-                    }
-                }
-            } else {
-                // No applicable rule: if a free gift exists, remove it.
-                if ($freeGiftItem) {
-                    $quote->removeItem($freeGiftItem->getId());
-                }
+            $quote->removeItem((int)$item->getItemId());
+            $changed = true;
+        }
+
+        return $changed;
+    }
+
+    private function findGiftItem(Quote $quote, string $sku): ?QuoteItem
+    {
+        foreach ($quote->getAllItems() as $item) {
+            if ($item instanceof QuoteItem && $this->isGiftItem($item) && $item->getSku() === $sku) {
+                return $item;
             }
-        } catch (\Exception $e) {
-            $this->logger->error('FreeGiftObserver error: ' . $e->getMessage());
+        }
+
+        return null;
+    }
+
+    private function isGiftItem(QuoteItem $item): bool
+    {
+        return (bool)$item->getData(self::OPTION_CODE) || (bool)$item->getOptionByCode(self::OPTION_CODE);
+    }
+
+    private function enforceGiftItemState(QuoteItem $item, string $sku): bool
+    {
+        $changed = $item->getCustomPrice() === null
+            || $item->getOriginalCustomPrice() === null
+            || (float)$item->getCustomPrice() !== 0.0
+            || (float)$item->getOriginalCustomPrice() !== 0.0
+            || (float)$item->getQty() !== 1.0
+            || !$item->getNoDiscount()
+            || !$item->getOptionByCode(self::OPTION_CODE);
+
+        $item->setData(self::OPTION_CODE, true);
+        $item->setData('niziou_freegift_sku', $sku);
+        $item->setData('gift_message_available', false);
+        $item->setNoDiscount(true);
+        $item->setQty(1);
+        $item->setCustomPrice(0.0);
+        $item->setOriginalCustomPrice(0.0);
+        $item->getProduct()->setIsSuperMode(true);
+
+        if (!$item->getOptionByCode(self::OPTION_CODE)) {
+            $item->addOption([
+                'code' => self::OPTION_CODE,
+                'value' => '1',
+                'product_id' => $item->getProductId(),
+            ]);
+        }
+
+        return $changed;
+    }
+
+    private function canAddProductAsGift(ProductInterface $product): bool
+    {
+        $typeId = (string)$product->getTypeId();
+        if (!in_array($typeId, [ProductType::TYPE_SIMPLE, ProductType::TYPE_VIRTUAL], true)) {
+            return false;
+        }
+
+        if ($product->getTypeInstance()->hasRequiredOptions($product)) {
+            return false;
+        }
+
+        return (bool)$product->isAvailable();
+    }
+
+    private function recollectTotalsWhenChanged(Quote $quote, bool $changed): void
+    {
+        if (!$changed) {
+            return;
+        }
+
+        $quote->setData('niziou_freegift_processing', true);
+        try {
+            $quote->setTotalsCollectedFlag(false);
+            $quote->collectTotals();
+        } finally {
+            $quote->unsetData('niziou_freegift_processing');
         }
     }
 }
