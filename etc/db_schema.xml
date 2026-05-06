@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<schema xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:Setup/Declaration/Schema/etc/schema.xsd">
+    <table name="salesrule" resource="salesrule" engine="innodb" comment="Salesrule">
+        <column xsi:type="smallint" name="freegift_enabled" padding="5" unsigned="true" nullable="false" identity="false" default="0" comment="Free Gift Enabled"/>
+        <column xsi:type="varchar" name="freegift_product_sku" nullable="true" length="64" comment="Free Gift Product SKU"/>
+    </table>
+</schema>
