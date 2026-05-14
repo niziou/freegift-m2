@@ -3,5 +3,10 @@
     <table name="salesrule" resource="salesrule" engine="innodb" comment="Salesrule">
         <column xsi:type="smallint" name="freegift_enabled" padding="5" unsigned="true" nullable="false" identity="false" default="0" comment="Free Gift Enabled"/>
         <column xsi:type="varchar" name="freegift_product_sku" nullable="true" length="64" comment="Free Gift Product SKU"/>
+        <column xsi:type="smallint" name="freegift_bogo_enabled" padding="5" unsigned="true" nullable="false" identity="false" default="0" comment="Free Gift BOGO Enabled"/>
+        <column xsi:type="varchar" name="freegift_bogo_product_sku" nullable="true" length="64" comment="Free Gift BOGO Product SKU"/>
+        <column xsi:type="int" name="freegift_bogo_buy_qty" padding="10" unsigned="true" nullable="false" identity="false" default="1" comment="Free Gift BOGO Buy Qty"/>
+        <column xsi:type="int" name="freegift_bogo_free_qty" padding="10" unsigned="true" nullable="false" identity="false" default="1" comment="Free Gift BOGO Free Qty"/>
+        <column xsi:type="int" name="freegift_bogo_max_free_qty" padding="10" unsigned="true" nullable="true" identity="false" comment="Free Gift BOGO Max Free Qty"/>
     </table>
 </schema>
