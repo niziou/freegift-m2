@@ -7,6 +7,8 @@
     <testsuites>
         <testsuite name="Niziou FreeGift Unit Tests">
             <directory>Test/Unit/Model/Config</directory>
+            <directory>Test/Unit/Observer</directory>
+            <directory>Test/Unit/Plugin</directory>
         </testsuite>
     </testsuites>
 </phpunit>
